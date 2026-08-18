@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tireur du Sahel — Entraînement clavier</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root{
+    --sky-top:#241531;
+    --sky-mid:#5a2f3f;
+    --sky-horizon:#c9622b;
+    --sun:#f2a65a;
+    --sand-far:#a67c4e;
+    --sand-near:#8a5f3a;
+    --sand-shadow:#5e3f26;
+    --khaki:#7a7f4f;
+    --khaki-dark:#4d5133;
+    --cream:#ede0c8;
+    --alert:#c1432c;
+    --tracer:#ffd27a;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:#000;
+    font-family:'Rajdhani',sans-serif;
+  }
+  #game-wrap{
+    position:relative; width:100%; height:100vh; height:100dvh;
+  }
+  canvas{ display:block; width:100%; height:100%; }
+
+  #hud{
+    position:absolute; top:0; left:0; right:0;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:16px 20px; pointer-events:none; z-index:5;
+  }
+  .hud-block{
+    color:var(--cream);
+    text-shadow:0 2px 6px rgba(0,0,0,.6);
+  }
+  .hud-label{
+    font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--khaki); font-weight:700;
+  }
+  .hud-value{
+    font-family:'Space Mono',monospace; font-size:26px; font-weight:700;
+    line-height:1.1;
+  }
+  #lives{ display:flex; gap:5px; margin-top:4px; }
+  .life-bullet{
+    width:8px; height:16px; background:var(--khaki);
+    clip-path:polygon(50% 0%, 100% 30%, 100% 100%, 0% 100%, 0% 30%);
+    transition:opacity .2s, background .2s;
+  }
+  .life-bullet.lost{ opacity:.15; background:#333; }
+
+  #target-word-bar{
+    position:absolute; bottom:64px; left:0; right:0;
+    display:flex; justify-content:center; pointer-events:none; z-index:5;
+  }
+  #target-word{
+    font-family:'Space Mono',monospace; font-size:15px; letter-spacing:.08em;
+    color:var(--khaki); background:rgba(20,15,10,.45); padding:5px 14px;
+    border-radius:3px; min-height:1em; border:1px solid rgba(122,127,79,.35);
+  }
+  #target-word .done{ color:var(--tracer); }
+
+  .overlay{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center;
+    background:radial-gradient(ellipse at center, rgba(36,21,49,.75), rgba(10,6,12,.94));
+    color:var(--cream); z-index:10; padding:24px;
+  }
+  .overlay h1{
+    font-size:clamp(28px,6vw,46px); margin:0 0 6px; letter-spacing:.04em;
+    color:var(--cream); text-transform:uppercase;
+  }
+  .overlay .accent{ color:var(--sun); }
+  .overlay p{
+    max-width:440px; font-size:16px; line-height:1.5; color:#cfc4ac; margin:8px 0 22px;
+  }
+  .overlay .stats{
+    font-family:'Space Mono',monospace; font-size:15px; color:var(--khaki); margin-bottom:20px;
+  }
+  .overlay .stats b{ color:var(--tracer); }
+  button.mission-btn{
+    font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:.1em;
+    text-transform:uppercase; font-size:16px; padding:12px 30px;
+    background:var(--khaki); color:#1a1c10; border:none; border-radius:2px;
+    cursor:pointer; transition:background .15s, transform .1s;
+  }
+  button.mission-btn:hover{ background:var(--tracer); }
+  button.mission-btn:active{ transform:scale(.97); }
+  .hidden{ display:none !important; }
+
+  #level-flash{
+    position:absolute; top:44%; left:50%; transform:translate(-50%,-50%);
+    font-family:'Rajdhani',sans-serif; font-weight:700; font-size:34px;
+    color:var(--tracer); text-transform:uppercase; letter-spacing:.15em;
+    opacity:0; pointer-events:none; z-index:6; text-shadow:0 0 18px rgba(255,210,122,.6);
+  }
+
+  .pause-toggle{
+    font-family:'Space Mono',monospace; font-size:14px; color:var(--cream);
+    background:rgba(20,15,10,.5); border:1px solid rgba(122,127,79,.4);
+    border-radius:3px; padding:8px 12px; cursor:pointer; line-height:1;
+    transition:background .15s;
+  }
+  .pause-toggle:hover{ background:rgba(122,127,79,.35); }
+
+  #mute-btn{
+    position:absolute; top:16px; left:20px; z-index:20;
+    font-family:'Space Mono',monospace; font-size:15px; color:var(--cream);
+    background:rgba(20,15,10,.5); border:1px solid rgba(122,127,79,.4);
+    border-radius:3px; padding:8px 11px; cursor:pointer; line-height:1;
+  }
+  #mute-btn:hover{ background:rgba(122,127,79,.35); }
+
+  #account-btn{
+    position:absolute; top:16px; left:70px; z-index:20;
+    font-family:'Rajdhani',sans-serif; font-weight:700; font-size:13px; color:var(--cream);
+    background:rgba(20,15,10,.5); border:1px solid rgba(122,127,79,.4);
+    border-radius:3px; padding:8px 12px; cursor:pointer; line-height:1;
+  }
+  #account-btn:hover{ background:rgba(122,127,79,.35); }
+
+  #account-overlay input{
+    font-family:'Space Mono',monospace; font-size:14px; padding:10px 12px;
+    border-radius:3px; border:1px solid rgba(122,127,79,.4); background:rgba(255,255,255,.06);
+    color:var(--cream); width:260px; max-width:80vw; margin-bottom:14px; text-align:center;
+  }
+  #account-status{ font-family:'Space Mono',monospace; font-size:13px; color:var(--khaki); margin-top:14px; }
+</style>
+</head>
+<body>
+<div id="game-wrap">
+  <canvas id="c"></canvas>
+  <button id="mute-btn" title="Couper/activer le son">🔊</button>
+  <button id="account-btn" title="Mon compte">👤 Compte</button>
+
+  <div id="hud">
+    <div class="hud-block">
+      <div class="hud-label">Score</div>
+      <div class="hud-value" id="score-val">0</div>
+    </div>
+    <div class="hud-block" style="text-align:center;">
+      <div class="hud-label">Mission</div>
+      <div class="hud-value" id="level-val" style="font-size:18px;">Recrue</div>
+      <div class="hud-label" id="mission-progress" style="margin-top:2px;">0 / 8</div>
+    </div>
+    <div class="hud-block" style="text-align:right; display:flex; align-items:flex-start; gap:14px;">
+      <div>
+        <div class="hud-label">Précision — MPM</div>
+        <div class="hud-value" id="wpm-val">0 / 0</div>
+        <div id="lives"></div>
+      </div>
+      <button id="pause-btn" class="pause-toggle" title="Pause (Echap)" style="pointer-events:auto;">❚❚</button>
+    </div>
+  </div>
+
+  <div id="target-word-bar"><div id="target-word"></div></div>
+  <div id="level-flash"></div>
+
+  <div class="overlay" id="start-overlay">
+    <h1>Tireur du <span class="accent">Sahel</span></h1>
+    <p>Un détachement isolé dans les dunes. Les ordres tombent du ciel, lettre par lettre —
+    tapez-les vite et sans erreur avant qu'ils n'atteignent la position. Chaque mot abattu compte.</p>
+    <button class="mission-btn" id="start-btn">Prendre position</button>
+    <div class="stats" id="best-score-line" style="margin-top:16px;"></div>
+  </div>
+
+  <div class="overlay hidden" id="account-overlay">
+    <h1>Mon <span class="accent">Compte</span></h1>
+    <p>Connecte-toi avec ton email pour sauvegarder ton meilleur score et ton grade d'une partie à l'autre. Aucun mot de passe — tu reçois un lien magique par email.</p>
+    <input type="email" id="account-email" placeholder="ton.email@exemple.com">
+    <br>
+    <button class="mission-btn" id="account-send-btn">Recevoir le lien magique</button>
+    <div id="account-status"></div>
+    <button class="mission-btn" id="account-close-btn" style="margin-top:18px; background:transparent; color:var(--khaki); border:1px solid rgba(122,127,79,.4);">Fermer</button>
+  </div>
+
+  <div class="overlay hidden" id="over-overlay">
+    <h1>Position <span class="accent">Perdue</span></h1>
+    <div class="stats">Score final : <b id="final-score">0</b> · Vitesse : <b id="final-wpm">0</b> mots/min · Précision : <b id="final-acc">0</b>%</div>
+    <button class="mission-btn" id="retry-btn">Nouvelle mission</button>
+  </div>
+
+  <div class="overlay hidden" id="pause-overlay">
+    <h1>Pause</h1>
+    <p>La mission est suspendue. Reprends quand tu es prêt.</p>
+    <button class="mission-btn" id="resume-btn">Reprendre</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  // ---------- Supabase : compte joueur + sauvegarde de score ----------
+  const SUPABASE_URL = 'https://omgoemyrgomxcmbqlixp.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_lT-S0_T_6sakvwF8icNhpA_qdqz49ZT';
+  const supa = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+  let currentUser = null;
+  let personalBest = { best_score:0, best_level:1 };
+
+  async function refreshAccountUI(){
+    const btn = document.getElementById('account-btn');
+    if(currentUser){
+      btn.textContent = '👤 ' + currentUser.email.split('@')[0];
+      await loadPersonalBest();
+      const line = document.getElementById('best-score-line');
+      if(line) line.textContent = 'Ton meilleur score : ' + personalBest.best_score + ' pts';
+    } else {
+      btn.textContent = '👤 Compte';
+      const line = document.getElementById('best-score-line');
+      if(line) line.textContent = '';
+    }
+  }
+
+  async function loadPersonalBest(){
+    if(!supa || !currentUser) return;
+    const { data } = await supa.from('scores').select('best_score,best_level').eq('id', currentUser.id).maybeSingle();
+    if(data) personalBest = data;
+  }
+
+  async function saveScoreIfBetter(score, level){
+    if(!supa || !currentUser) return;
+    if(score <= personalBest.best_score) return;
+    personalBest = { best_score: score, best_level: level };
+    await supa.from('scores').upsert({
+      id: currentUser.id,
+      pseudo: currentUser.email.split('@')[0],
+      best_score: score,
+      best_level: level,
+      updated_at: new Date().toISOString()
+    });
+  }
+
+  if(supa){
+    supa.auth.getSession().then(({data})=>{
+      currentUser = data.session ? data.session.user : null;
+      refreshAccountUI();
+    });
+    supa.auth.onAuthStateChange((_event, session)=>{
+      currentUser = session ? session.user : null;
+      refreshAccountUI();
+    });
+  }
+
+  document.getElementById('account-btn').addEventListener('click', ()=>{
+    document.getElementById('account-overlay').classList.remove('hidden');
+    document.getElementById('account-status').textContent = currentUser ? 'Connecté en tant que ' + currentUser.email : '';
+  });
+  document.getElementById('account-close-btn').addEventListener('click', ()=>{
+    document.getElementById('account-overlay').classList.add('hidden');
+  });
+  document.getElementById('account-send-btn').addEventListener('click', async ()=>{
+    const email = document.getElementById('account-email').value.trim();
+    const statusEl = document.getElementById('account-status');
+    if(!supa){ statusEl.textContent="Connexion au compte indisponible pour le moment."; return; }
+    if(!email || !email.includes('@')){ statusEl.textContent = 'Entre un email valide.'; return; }
+    statusEl.textContent = 'Envoi en cours...';
+    const { error } = await supa.auth.signInWithOtp({ email, options:{ emailRedirectTo: window.location.href } });
+    statusEl.textContent = error ? 'Erreur : '+error.message : 'Lien envoyé ! Vérifie ta boîte mail (et les spams).';
+  });
+
+  let W, H, DPR;
+
+  // ---------- Musique d'ambiance procédurale (aucun fichier externe, généré en direct) ----------
+  let audioCtx=null, masterGain=null, musicOn=true, musicStarted=false, arpTimer=null;
+  const scale = [110.00,123.47,146.83,164.81,196.00,220.00]; // gamme pentatonique mineure, ambiance désert
+  function initAudio(){
+    if(musicStarted) return;
+    try{
+      audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = musicOn ? 0.16 : 0;
+      masterGain.connect(audioCtx.destination);
+      startDrone();
+      scheduleArp();
+      musicStarted = true;
+    }catch(e){ /* audio indisponible, on continue sans son */ }
+  }
+  function startDrone(){
+    [55, 55*1.5].forEach((f,i)=>{
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type='sine'; o.frequency.value=f;
+      g.gain.value = i===0?0.5:0.22;
+      o.connect(g); g.connect(masterGain);
+      o.start();
+      const lfo = audioCtx.createOscillator();
+      const lfoGain = audioCtx.createGain();
+      lfo.frequency.value=0.06+i*0.02; lfoGain.gain.value=0.05;
+      lfo.connect(lfoGain); lfoGain.connect(g.gain);
+      lfo.start();
+    });
+  }
+  function pluck(freq){
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type='triangle'; o.frequency.value=freq;
+    g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(0.22,t+0.04);
+    g.gain.exponentialRampToValueAtTime(0.001,t+1.4);
+    o.connect(g); g.connect(masterGain);
+    o.start(t); o.stop(t+1.5);
+  }
+  function scheduleArp(){
+    arpTimer = setInterval(()=>{
+      if(!musicOn) return;
+      const note = scale[Math.floor(Math.random()*scale.length)] * (Math.random()<0.5?2:1);
+      pluck(note);
+    }, 1900);
+  }
+  document.getElementById('mute-btn').addEventListener('click', ()=>{
+    musicOn = !musicOn;
+    document.getElementById('mute-btn').textContent = musicOn ? '🔊' : '🔇';
+    if(masterGain) masterGain.gain.value = musicOn ? 0.16 : 0;
+    if(musicOn && !musicStarted) initAudio();
+  });
+
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    canvas.width = W*DPR; canvas.height = H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', resize);
+
+  // ---------- Word bank ----------
+  const BANK_EASY = ["sable","dune","vent","feu","nord","sud","ordre","chef","camp","garde","tir","paix","route","carte","radio",
+    "code","bug","octet","souris","ecran","clavier","fichier","reseau","donnee","serveur",
+    "paris","terre","soleil","lune","fleuve","ocean","musique","planete","histoire","peinture"];
+  const BANK_MID = ["patrouille","horizon","embuscade","munitions","frontiere","silence","manoeuvre","operation","vigilance","escouade","tempete","secteur",
+    "algorithme","fonction","variable","logiciel","processeur","interface","protocole","script","boucle","compilateur",
+    "renaissance","continent","democratie","civilisation","philosophie","litterature","architecture","revolution"];
+  const BANK_HARD = ["reconnaissance","commandement","infanterie","observation","coordination","surveillance","strategie","couverture","extraction","logistique",
+    "cybersecurite","chiffrement","recursivite","framework","exception","virtualisation","cryptographie",
+    "constitution","independance","mondialisation","archeologie","anthropologie"];
+
+  const MISSIONS = [
+    {name:"Reconnaissance",   pool:()=>BANK_EASY,                                spawnInterval:2700, speedMin:15, speedMax:19, target:8},
+    {name:"Patrouille",       pool:()=>BANK_EASY,                                spawnInterval:2450, speedMin:18, speedMax:23, target:10},
+    {name:"Ravitaillement",   pool:()=>BANK_EASY.concat(BANK_MID),               spawnInterval:2200, speedMin:21, speedMax:27, target:12},
+    {name:"Ligne de front",   pool:()=>BANK_EASY.concat(BANK_MID),               spawnInterval:1980, speedMin:25, speedMax:31, target:14},
+    {name:"Zone rouge",       pool:()=>BANK_EASY.concat(BANK_MID,BANK_HARD),     spawnInterval:1780, speedMin:29, speedMax:36, target:16},
+    {name:"Territoire hostile", pool:()=>BANK_EASY.concat(BANK_MID,BANK_HARD),   spawnInterval:1600, speedMin:33, speedMax:41, target:18},
+  ];
+
+  function getMission(level){
+    const idx = Math.min(level-1, MISSIONS.length-1);
+    const m = MISSIONS[idx];
+    const extra = Math.max(0, level-MISSIONS.length);
+    return {
+      name: m.name + (extra>0 ? ' +'+extra : ''),
+      pool: m.pool(),
+      spawnInterval: Math.max(m.spawnInterval - extra*70, 850),
+      speedMin: m.speedMin + extra*3,
+      speedMax: m.speedMax + extra*3,
+      target: m.target + extra*2
+    };
+  }
+
+  // ---------- Game state ----------
+  let state = 'start'; // start | playing | paused | over
+  let score=0, lives=5, level=1;
+  let activeWords=[];
+  let targetWord=null;
+  let spawnTimer=0;
+  let currentMission = getMission(1);
+  let missionProgress = 0;
+  let lastTime=0;
+  let charsTyped=0, charsCorrect=0, startTime=0;
+  let tracers=[]; // {x1,y1,x2,y2,life}
+  let muzzleFlash=0;
+  let shakeT=0;
+  let wordId=0;
+
+  const soldierX = ()=> W*0.5;
+  const soldierY = ()=> H*0.86;
+
+  function reset(){
+    score=0; lives=5; level=1; activeWords=[]; targetWord=null;
+    spawnTimer=0; missionProgress=0; currentMission=getMission(1);
+    charsTyped=0; charsCorrect=0; startTime=performance.now();
+    tracers=[]; muzzleFlash=0;
+    updateHUD();
+  }
+
+  function updateHUD(){
+    document.getElementById('score-val').textContent = score;
+    document.getElementById('level-val').textContent = currentMission.name;
+    document.getElementById('mission-progress').textContent = missionProgress + ' / ' + currentMission.target;
+    const elapsedMin = Math.max((performance.now()-startTime)/60000, 1/60);
+    const wpm = Math.round((charsCorrect/5)/elapsedMin);
+    const acc = charsTyped>0 ? Math.round(100*charsCorrect/charsTyped) : 100;
+    document.getElementById('wpm-val').textContent = wpm + ' / ' + acc + '%';
+    const livesEl = document.getElementById('lives');
+    livesEl.innerHTML='';
+    for(let i=0;i<5;i++){
+      const d=document.createElement('div');
+      d.className='life-bullet'+(i<lives?'':' lost');
+      livesEl.appendChild(d);
+    }
+  }
+
+  function spawnWord(){
+    const pool = currentMission.pool;
+    const word = pool[Math.floor(Math.random()*pool.length)];
+    const margin = 60;
+    const x = margin + Math.random()*(W-margin*2);
+    activeWords.push({
+      id: wordId++,
+      word, typed:0,
+      x, y: -20,
+      speed: currentMission.speedMin + Math.random()*(currentMission.speedMax-currentMission.speedMin)
+    });
+  }
+
+  function flashLevel(txt){
+    const el = document.getElementById('level-flash');
+    el.textContent = txt;
+    el.style.transition='none';
+    el.style.opacity='1';
+    el.style.transform='translate(-50%,-50%) scale(1.1)';
+    requestAnimationFrame(()=>{
+      el.style.transition='opacity 1.1s ease, transform 1.1s ease';
+      el.style.opacity='0';
+      el.style.transform='translate(-50%,-60%) scale(1)';
+    });
+  }
+
+  function destroyWord(w, hit){
+    activeWords = activeWords.filter(a=>a.id!==w.id);
+    if(targetWord && targetWord.id===w.id) targetWord=null;
+    document.getElementById('target-word').innerHTML='';
+    if(hit){
+      score += w.word.length*10;
+      tracers.push({x1:soldierX(), y1:soldierY()-40, x2:w.x, y2:w.y, life:1});
+      muzzleFlash = 1;
+      shakeT = 0.15;
+      missionProgress++;
+      if(missionProgress>=currentMission.target){
+        level++;
+        missionProgress=0;
+        currentMission = getMission(level);
+        activeWords = [];
+        flashLevel('Mission accomplie — ' + currentMission.name);
+      }
+    } else {
+      lives -= 1;
+      shakeT = 0.35;
+    }
+    updateHUD();
+    if(lives<=0) endGame();
+  }
+
+  function endGame(){
+    state='over';
+    const elapsedMin = Math.max((performance.now()-startTime)/60000, 1/60);
+    const wpm = Math.round((charsCorrect/5)/elapsedMin);
+    const acc = charsTyped>0 ? Math.round(100*charsCorrect/charsTyped) : 100;
+    document.getElementById('final-score').textContent = score;
+    document.getElementById('final-wpm').textContent = wpm;
+    document.getElementById('final-acc').textContent = acc;
+    document.getElementById('over-overlay').classList.remove('hidden');
+    saveScoreIfBetter(score, level);
+  }
+
+  // ---------- Input ----------
+  window.addEventListener('keydown', (e)=>{
+    if(e.key==='Escape' && (state==='playing' || state==='paused')){
+      togglePause();
+      return;
+    }
+    if(state!=='playing') return;
+    const key = e.key;
+    if(key.length!==1 || !/[a-zA-Zàâäéèêëïîôöùûüç]/.test(key)) return;
+    const k = key.toLowerCase();
+
+    if(!targetWord){
+      let candidates = activeWords.filter(w=>w.word[0]===k);
+      if(candidates.length===0) return;
+      candidates.sort((a,b)=>b.y-a.y);
+      targetWord = candidates[0];
+      targetWord.typed = 1;
+      charsTyped++; charsCorrect++;
+    } else {
+      const expected = targetWord.word[targetWord.typed];
+      charsTyped++;
+      if(expected===k){
+        targetWord.typed++;
+        charsCorrect++;
+      } else {
+        return; // ignore mismatched key, no penalty beyond accuracy stat
+      }
+    }
+    renderTargetWord();
+    if(targetWord.typed>=targetWord.word.length){
+      destroyWord(targetWord, true);
+    }
+    updateHUD();
+  });
+
+  function renderTargetWord(){
+    const el = document.getElementById('target-word');
+    if(!targetWord){ el.innerHTML=''; return; }
+    const done = targetWord.word.slice(0,targetWord.typed);
+    const rest = targetWord.word.slice(targetWord.typed);
+    el.innerHTML = '<span class="done">'+done+'</span>'+rest;
+  }
+
+  // ---------- Drawing ----------
+  function drawScene(dt){
+    ctx.clearRect(0,0,W,H);
+    let ox=0, oy=0;
+    if(shakeT>0){
+      shakeT-=dt;
+      ox=(Math.random()-0.5)*6*Math.max(shakeT,0);
+      oy=(Math.random()-0.5)*4*Math.max(shakeT,0);
+    }
+    ctx.save();
+    ctx.translate(ox,oy);
+
+    // sky gradient
+    const sky = ctx.createLinearGradient(0,0,0,H*0.72);
+    sky.addColorStop(0, getCSS('--sky-top'));
+    sky.addColorStop(0.55, getCSS('--sky-mid'));
+    sky.addColorStop(1, getCSS('--sky-horizon'));
+    ctx.fillStyle=sky;
+    ctx.fillRect(0,0,W,H*0.74);
+
+    // sun
+    ctx.beginPath();
+    ctx.arc(W*0.78, H*0.42, Math.min(W,H)*0.09, 0, Math.PI*2);
+    ctx.fillStyle=getCSS('--sun');
+    ctx.globalAlpha=0.85;
+    ctx.fill();
+    ctx.globalAlpha=1;
+
+    // far dune
+    ctx.beginPath();
+    ctx.moveTo(0,H*0.62);
+    ctx.quadraticCurveTo(W*0.3,H*0.52,W*0.55,H*0.63);
+    ctx.quadraticCurveTo(W*0.8,H*0.72,W,H*0.6);
+    ctx.lineTo(W,H*0.74); ctx.lineTo(0,H*0.74); ctx.closePath();
+    ctx.fillStyle=getCSS('--sand-far');
+    ctx.fill();
+
+    // near dune
+    ctx.beginPath();
+    ctx.moveTo(0,H*0.78);
+    ctx.quadraticCurveTo(W*0.25,H*0.66,W*0.5,H*0.79);
+    ctx.quadraticCurveTo(W*0.75,H*0.9,W,H*0.76);
+    ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath();
+    ctx.fillStyle=getCSS('--sand-near');
+    ctx.fill();
+
+    // dune shading
+    ctx.beginPath();
+    ctx.moveTo(W*0.5,H*0.79);
+    ctx.quadraticCurveTo(W*0.75,H*0.9,W,H*0.76);
+    ctx.lineTo(W,H); ctx.lineTo(W*0.5,H); ctx.closePath();
+    ctx.fillStyle=getCSS('--sand-shadow');
+    ctx.globalAlpha=0.45;
+    ctx.fill();
+    ctx.globalAlpha=1;
+
+    // words falling
+    activeWords.forEach(w=>{
+      ctx.font = '700 17px "Space Mono", monospace';
+      ctx.textAlign='center';
+      const isTarget = targetWord && targetWord.id===w.id;
+      const doneCount = isTarget ? w.typed : 0;
+      const doneTxt = w.word.slice(0,doneCount);
+      const restTxt = w.word.slice(doneCount);
+      const totalWidth = ctx.measureText(w.word).width;
+      let cx = w.x - totalWidth/2;
+      ctx.textAlign='left';
+      if(doneTxt){
+        ctx.fillStyle = getCSS('--tracer');
+        ctx.fillText(doneTxt, cx, w.y);
+        cx += ctx.measureText(doneTxt).width;
+      }
+      ctx.fillStyle = isTarget ? getCSS('--cream') : 'rgba(237,224,200,0.75)';
+      ctx.fillText(restTxt, cx, w.y);
+
+      // small parachute marker above word
+      ctx.beginPath();
+      ctx.arc(w.x, w.y-16, 4, Math.PI, 0);
+      ctx.strokeStyle='rgba(237,224,200,0.5)';
+      ctx.lineWidth=1.2;
+      ctx.stroke();
+    });
+
+    // tracers
+    tracers.forEach(t=>{
+      ctx.save();
+      ctx.globalAlpha = Math.max(t.life,0);
+      ctx.strokeStyle = getCSS('--tracer');
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.moveTo(t.x1,t.y1);
+      ctx.lineTo(t.x2,t.y2);
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // soldier silhouette
+    drawSoldier();
+
+    ctx.restore();
+  }
+
+  function getCSS(varName){
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  }
+
+  function drawSoldier(){
+    const sx = soldierX(), sy = soldierY();
+    const scale = 1.35;
+    ctx.save();
+    ctx.translate(sx,sy);
+    ctx.scale(scale,scale);
+
+    const uniform   = '#8a7a52'; // tenue sable/kaki
+    const uniformSh = '#6b5f3f'; // ombre tenue
+    const vest      = '#54563a'; // gilet tactique olive
+    const skin      = '#c99a6b';
+    const boots     = '#3c3324';
+    const helmet    = '#6f6a45';
+    const strap     = '#332c1f';
+
+    // ombre au sol
+    ctx.beginPath();
+    ctx.ellipse(2,42,22,5,0,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,0.35)';
+    ctx.fill();
+
+    // jambes (pantalon kaki)
+    ctx.fillStyle = uniform;
+    ctx.beginPath();
+    ctx.moveTo(-13,40); ctx.lineTo(-9,0); ctx.lineTo(-1,0); ctx.lineTo(0,40); ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(3,0); ctx.lineTo(11,0); ctx.lineTo(16,40); ctx.lineTo(4,40); ctx.closePath();
+    ctx.fill();
+    // ombre jambe arrière
+    ctx.fillStyle = uniformSh;
+    ctx.beginPath();
+    ctx.moveTo(3,0); ctx.lineTo(7,0); ctx.lineTo(10,40); ctx.lineTo(4,40); ctx.closePath();
+    ctx.fill();
+
+    // bottes
+    ctx.fillStyle = boots;
+    ctx.fillRect(-15,37,9,7);
+    ctx.fillRect(3,37,15,7);
+
+    // torse (tenue + gilet tactique)
+    ctx.fillStyle = uniform;
+    ctx.beginPath();
+    ctx.moveTo(-13,0);
+    ctx.quadraticCurveTo(-16,-30,-6,-42);
+    ctx.lineTo(10,-42);
+    ctx.quadraticCurveTo(15,-30,12,0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = vest;
+    ctx.beginPath();
+    ctx.moveTo(-11,-4);
+    ctx.quadraticCurveTo(-13,-28,-5,-38);
+    ctx.lineTo(7,-38);
+    ctx.quadraticCurveTo(12,-28,10,-4);
+    ctx.closePath();
+    ctx.fill();
+    // poches gilet
+    ctx.fillStyle = uniformSh;
+    ctx.fillRect(-8,-20,6,8);
+    ctx.fillRect(2,-20,6,8);
+    // bretelle
+    ctx.strokeStyle = strap;
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(-9,-38); ctx.lineTo(6,-6);
+    ctx.stroke();
+
+    // bras
+    ctx.fillStyle = uniform;
+    ctx.beginPath();
+    ctx.moveTo(9,-36); ctx.quadraticCurveTo(24,-34,32,-40);
+    ctx.lineTo(30,-33); ctx.quadraticCurveTo(20,-28,10,-24);
+    ctx.closePath(); ctx.fill();
+
+    // tête + peau
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.arc(1,-49, 9, 0, Math.PI*2);
+    ctx.fill();
+
+    // casque avec couvre-casque sable + filet
+    ctx.fillStyle = helmet;
+    ctx.beginPath();
+    ctx.arc(1,-51, 10, Math.PI, 0);
+    ctx.lineTo(11,-49);
+    ctx.quadraticCurveTo(1,-46,-9,-49);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = strap;
+    ctx.lineWidth=1;
+    for(let i=-7;i<=7;i+=3.5){
+      ctx.beginPath(); ctx.moveTo(i,-58); ctx.lineTo(i+2,-49); ctx.stroke();
+    }
+    // jugulaire
+    ctx.beginPath();
+    ctx.moveTo(-6,-46); ctx.lineTo(-2,-40); ctx.moveTo(8,-46); ctx.lineTo(4,-40);
+    ctx.stroke();
+
+    // fusil / lunette de visée
+    ctx.strokeStyle = '#211d15';
+    ctx.lineWidth=4.5;
+    ctx.beginPath();
+    ctx.moveTo(11,-38);
+    ctx.lineTo(50,-45);
+    ctx.stroke();
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(2,-27);
+    ctx.lineTo(33,-36);
+    ctx.stroke();
+    // lunette
+    ctx.strokeStyle = '#161310';
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(24,-40); ctx.lineTo(34,-43);
+    ctx.stroke();
+    // crosse
+    ctx.fillStyle = '#3a2f1e';
+    ctx.beginPath();
+    ctx.moveTo(1,-30); ctx.lineTo(-8,-26); ctx.lineTo(-6,-20); ctx.lineTo(4,-25);
+    ctx.closePath(); ctx.fill();
+
+    // muzzle flash
+    if(muzzleFlash>0){
+      ctx.save();
+      ctx.globalAlpha = muzzleFlash;
+      ctx.fillStyle = getCSS('--tracer');
+      ctx.beginPath();
+      ctx.arc(50,-45,7*muzzleFlash+3,0,Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  // ---------- Loop ----------
+  function loop(ts){
+    if(!lastTime) lastTime=ts;
+    const dt = Math.min((ts-lastTime)/1000, 0.05);
+    lastTime = ts;
+
+    if(state==='playing'){
+      spawnTimer += dt*1000;
+      const curInterval = currentMission.spawnInterval;
+      if(spawnTimer>curInterval){
+        spawnTimer=0;
+        spawnWord();
+      }
+      activeWords.forEach(w=> w.y += w.speed*dt);
+      const groundY = soldierY()-46;
+      const reached = activeWords.filter(w=>w.y>=groundY);
+      reached.forEach(w=> destroyWord(w, false));
+
+      tracers.forEach(t=> t.life -= dt*3.2);
+      tracers = tracers.filter(t=>t.life>0);
+      if(muzzleFlash>0) muzzleFlash = Math.max(0, muzzleFlash - dt*6);
+
+      if(Math.floor(ts/500)!==Math.floor((ts-16)/500)) updateHUD();
+    }
+
+    drawScene(dt);
+    requestAnimationFrame(loop);
+  }
+
+  function togglePause(){
+    if(state==='playing'){
+      state='paused';
+      document.getElementById('pause-overlay').classList.remove('hidden');
+    } else if(state==='paused'){
+      state='playing';
+      document.getElementById('pause-overlay').classList.add('hidden');
+      lastTime=0; // évite un grand saut de dt après la pause
+    }
+  }
+  document.getElementById('pause-btn').addEventListener('click', togglePause);
+  document.getElementById('resume-btn').addEventListener('click', togglePause);
+
+  // ---------- Start / restart ----------
+  document.getElementById('start-btn').addEventListener('click', ()=>{
+    document.getElementById('start-overlay').classList.add('hidden');
+    initAudio();
+    resize();
+    reset();
+    state='playing';
+  });
+  document.getElementById('retry-btn').addEventListener('click', ()=>{
+    document.getElementById('over-overlay').classList.add('hidden');
+    reset();
+    state='playing';
+  });
+
+  resize();
+  drawScene(0);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
