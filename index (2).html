@@ -51,6 +51,13 @@
     font-family:'Space Mono',monospace; font-size:26px; font-weight:700;
     line-height:1.1;
   }
+  #score-val{
+    transition: font-size 0.1s; /* léger effet lors du changement */
+  }
+  .score-popup{
+    position:absolute; font-family:'Space Mono',monospace; font-weight:700; font-size:20px;
+    color:var(--tracer); pointer-events:none; text-shadow:0 0 8px rgba(255,210,122,.5);
+  }
   #lives{ display:flex; gap:5px; margin-top:4px; }
   .life-bullet{
     width:8px; height:16px; background:var(--khaki);
@@ -186,7 +193,13 @@
 
   <div class="overlay hidden" id="over-overlay">
     <h1>Position <span class="accent">Perdue</span></h1>
-    <div class="stats">Score final : <b id="final-score">0</b> · Vitesse : <b id="final-wpm">0</b> mots/min · Précision : <b id="final-acc">0</b>%</div>
+    <div class="stats">
+      Score de base : <b id="final-score">0</b> pts<br>
+      Bonus précision : <b id="final-precision-bonus">0</b> pts<br>
+      Bonus vitesse : <b id="final-speed-bonus">0</b> pts<br>
+      <b style="font-size:18px; margin-top:8px; display:block;">Score final : <span class="accent" id="final-total-score">0</span> pts</b><br>
+      <span style="font-size:12px; color:var(--khaki);">Vitesse : <b id="final-wpm">0</b> mots/min · Précision : <b id="final-acc">0</b>%</span>
+    </div>
     <button class="mission-btn" id="retry-btn">Nouvelle mission</button>
   </div>
 
@@ -359,12 +372,16 @@
     const idx = Math.min(level-1, MISSIONS.length-1);
     const m = MISSIONS[idx];
     const extra = Math.max(0, level-MISSIONS.length);
+    
+    // Accélération progressive : à partir du niveau 2, +1% plus rapide par niveau
+    const accelerator = level >= 2 ? Math.pow(1.01, level-2) : 1;
+    
     return {
       name: m.name + (extra>0 ? ' +'+extra : ''),
       pool: m.pool(),
-      spawnInterval: Math.max(m.spawnInterval - extra*70, 850),
-      speedMin: m.speedMin + extra*3,
-      speedMax: m.speedMax + extra*3,
+      spawnInterval: Math.max((m.spawnInterval - extra*70) / accelerator, 850),
+      speedMin: (m.speedMin + extra*3) * accelerator,
+      speedMax: (m.speedMax + extra*3) * accelerator,
       target: m.target + extra*2
     };
   }
@@ -380,6 +397,7 @@
   let lastTime=0;
   let charsTyped=0, charsCorrect=0, startTime=0;
   let tracers=[]; // {x1,y1,x2,y2,life}
+  let scorePopups=[]; // {x,y,life}
   let muzzleFlash=0;
   let shakeT=0;
   let wordId=0;
@@ -443,7 +461,8 @@
     if(targetWord && targetWord.id===w.id) targetWord=null;
     document.getElementById('target-word').innerHTML='';
     if(hit){
-      score += w.word.length*10;
+      score += 100; // 100 pts par mot, peu importe la longueur
+      scorePopups.push({x: w.x, y: w.y, life: 1.2}); // popup d'animation
       tracers.push({x1:soldierX(), y1:soldierY()-40, x2:w.x, y2:w.y, life:1});
       muzzleFlash = 1;
       shakeT = 0.15;
@@ -468,11 +487,26 @@
     const elapsedMin = Math.max((performance.now()-startTime)/60000, 1/60);
     const wpm = Math.round((charsCorrect/5)/elapsedMin);
     const acc = charsTyped>0 ? Math.round(100*charsCorrect/charsTyped) : 100;
+    
+    // Calcul des bonus
+    let precisionBonus = 0;
+    if(acc>=95) precisionBonus = Math.round(score*0.20); // 20% si précision ≥ 95%
+    else if(acc>=85) precisionBonus = Math.round(score*0.10); // 10% si précision ≥ 85%
+    
+    let speedBonus = 0;
+    if(wpm>=80) speedBonus = Math.round(score*0.15); // 15% si vitesse ≥ 80 MPM
+    else if(wpm>=60) speedBonus = Math.round(score*0.08); // 8% si vitesse ≥ 60 MPM
+    
+    const totalScore = score + precisionBonus + speedBonus;
+    
     document.getElementById('final-score').textContent = score;
+    document.getElementById('final-precision-bonus').textContent = precisionBonus;
+    document.getElementById('final-speed-bonus').textContent = speedBonus;
+    document.getElementById('final-total-score').textContent = totalScore;
     document.getElementById('final-wpm').textContent = wpm;
     document.getElementById('final-acc').textContent = acc;
     document.getElementById('over-overlay').classList.remove('hidden');
-    saveScoreIfBetter(score, level);
+    saveScoreIfBetter(totalScore, level);
   }
 
   // ---------- Input ----------
@@ -611,6 +645,19 @@
       ctx.moveTo(t.x1,t.y1);
       ctx.lineTo(t.x2,t.y2);
       ctx.stroke();
+      ctx.restore();
+    });
+
+    // popups de score (+100)
+    scorePopups.forEach(p=>{
+      ctx.save();
+      const progress = 1 - p.life; // 0 au départ, 1 à la fin
+      const yOffset = progress * 60; // monte de 60 px
+      ctx.globalAlpha = Math.max(p.life, 0);
+      ctx.fillStyle = getCSS('--tracer');
+      ctx.font = 'bold 24px "Space Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('+100', p.x, p.y - yOffset);
       ctx.restore();
     });
 
@@ -783,6 +830,9 @@
       tracers.forEach(t=> t.life -= dt*3.2);
       tracers = tracers.filter(t=>t.life>0);
       if(muzzleFlash>0) muzzleFlash = Math.max(0, muzzleFlash - dt*6);
+
+      scorePopups.forEach(p=> p.life -= dt*0.83); // durée d'animation d'environ 1.2s
+      scorePopups = scorePopups.filter(p=>p.life>0);
 
       if(Math.floor(ts/500)!==Math.floor((ts-16)/500)) updateHUD();
     }
