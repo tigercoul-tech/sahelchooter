@@ -349,23 +349,24 @@
   window.addEventListener('resize', resize);
 
   // ---------- Word bank ----------
-  const BANK_EASY = ["sable","dune","vent","feu","nord","sud","ordre","chef","camp","garde","tir","paix","route","carte","radio",
+  const BANK_EASY = ["sable","dune","vent","soleil","horizon","chaleur","silence","route","carte","boussole",
     "code","bug","octet","souris","ecran","clavier","fichier","reseau","donnee","serveur",
-    "paris","terre","soleil","lune","fleuve","ocean","musique","planete","histoire","peinture"];
-  const BANK_MID = ["patrouille","horizon","embuscade","munitions","frontiere","silence","manoeuvre","operation","vigilance","escouade","tempete","secteur",
-    "algorithme","fonction","variable","logiciel","processeur","interface","protocole","script","boucle","compilateur",
-    "renaissance","continent","democratie","civilisation","philosophie","litterature","architecture","revolution"];
-  const BANK_HARD = ["reconnaissance","commandement","infanterie","observation","coordination","surveillance","strategie","couverture","extraction","logistique",
-    "cybersecurite","chiffrement","recursivite","framework","exception","virtualisation","cryptographie",
-    "constitution","independance","mondialisation","archeologie","anthropologie"];
+    "paris","terre","lune","fleuve","ocean","musique","planete","histoire","peinture","voyage",
+    "cuisine","jardin","lecture","famille","couleur","image","papier","ballon","miroir","fenetre"];
+  const BANK_MID = ["algorithme","fonction","variable","logiciel","processeur","interface","protocole","script","boucle","compilateur",
+    "renaissance","continent","democratie","civilisation","philosophie","litterature","architecture","revolution",
+    "geographie","biologie","chimie","physique","economie","medecine","astronomie","geologie","linguistique"];
+  const BANK_HARD = ["cybersecurite","chiffrement","recursivite","framework","exception","virtualisation","cryptographie",
+    "constitution","independance","mondialisation","archeologie","anthropologie",
+    "intelligence","statistique","probabilite","thermodynamique","photosynthese","stratosphere"];
 
   const MISSIONS = [
-    {name:"Reconnaissance",   pool:()=>BANK_EASY,                                spawnInterval:2700, speedMin:15, speedMax:19, target:8},
-    {name:"Patrouille",       pool:()=>BANK_EASY,                                spawnInterval:2450, speedMin:18, speedMax:23, target:10},
-    {name:"Ravitaillement",   pool:()=>BANK_EASY.concat(BANK_MID),               spawnInterval:2200, speedMin:21, speedMax:27, target:12},
-    {name:"Ligne de front",   pool:()=>BANK_EASY.concat(BANK_MID),               spawnInterval:1980, speedMin:25, speedMax:31, target:14},
-    {name:"Zone rouge",       pool:()=>BANK_EASY.concat(BANK_MID,BANK_HARD),     spawnInterval:1780, speedMin:29, speedMax:36, target:16},
-    {name:"Territoire hostile", pool:()=>BANK_EASY.concat(BANK_MID,BANK_HARD),   spawnInterval:1600, speedMin:33, speedMax:41, target:18},
+    {pool:()=>BANK_EASY,                                spawnInterval:2700, speedMin:15, speedMax:19, target:8},
+    {pool:()=>BANK_EASY,                                spawnInterval:2450, speedMin:18, speedMax:23, target:10},
+    {pool:()=>BANK_EASY.concat(BANK_MID),               spawnInterval:2200, speedMin:21, speedMax:27, target:12},
+    {pool:()=>BANK_EASY.concat(BANK_MID),               spawnInterval:1980, speedMin:25, speedMax:31, target:14},
+    {pool:()=>BANK_EASY.concat(BANK_MID,BANK_HARD),     spawnInterval:1780, speedMin:29, speedMax:36, target:16},
+    {pool:()=>BANK_EASY.concat(BANK_MID,BANK_HARD),     spawnInterval:1600, speedMin:33, speedMax:41, target:18},
   ];
 
   function getMission(level){
@@ -377,7 +378,7 @@
     const accelerator = level >= 2 ? Math.pow(1.01, level-2) : 1;
     
     return {
-      name: m.name + (extra>0 ? ' +'+extra : ''),
+      name: 'Mission ' + level, // toujours clair et numéroté
       pool: m.pool(),
       spawnInterval: Math.max((m.spawnInterval - extra*70) / accelerator, 850),
       speedMin: (m.speedMin + extra*3) * accelerator,
@@ -388,7 +389,7 @@
 
   // ---------- Game state ----------
   let state = 'start'; // start | playing | paused | over
-  let score=0, lives=5, level=1;
+  let score=0, lives=3, level=1;
   let activeWords=[];
   let targetWord=null;
   let spawnTimer=0;
@@ -406,7 +407,7 @@
   const soldierY = ()=> H*0.86;
 
   function reset(){
-    score=0; lives=5; level=1; activeWords=[]; targetWord=null;
+    score=0; lives=3; level=1; activeWords=[]; targetWord=null;
     spawnTimer=0; missionProgress=0; currentMission=getMission(1);
     charsTyped=0; charsCorrect=0; startTime=performance.now();
     tracers=[]; muzzleFlash=0;
@@ -423,7 +424,7 @@
     document.getElementById('wpm-val').textContent = wpm + ' / ' + acc + '%';
     const livesEl = document.getElementById('lives');
     livesEl.innerHTML='';
-    for(let i=0;i<5;i++){
+    for(let i=0;i<3;i++){
       const d=document.createElement('div');
       d.className='life-bullet'+(i<lives?'':' lost');
       livesEl.appendChild(d);
@@ -461,7 +462,7 @@
     if(targetWord && targetWord.id===w.id) targetWord=null;
     document.getElementById('target-word').innerHTML='';
     if(hit){
-      score += 100; // 100 pts par mot, peu importe la longueur
+      score += 10; // 10 pts par mot, peu importe la longueur
       scorePopups.push({x: w.x, y: w.y, life: 1.2}); // popup d'animation
       tracers.push({x1:soldierX(), y1:soldierY()-40, x2:w.x, y2:w.y, life:1});
       muzzleFlash = 1;
@@ -648,7 +649,7 @@
       ctx.restore();
     });
 
-    // popups de score (+100)
+    // popups de score (+10)
     scorePopups.forEach(p=>{
       ctx.save();
       const progress = 1 - p.life; // 0 au départ, 1 à la fin
@@ -657,7 +658,7 @@
       ctx.fillStyle = getCSS('--tracer');
       ctx.font = 'bold 24px "Space Mono", monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('+100', p.x, p.y - yOffset);
+      ctx.fillText('+10', p.x, p.y - yOffset);
       ctx.restore();
     });
 
