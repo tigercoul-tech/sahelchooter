@@ -54,6 +54,8 @@
   #score-val{
     transition: font-size 0.1s; /* léger effet lors du changement */
   }
+  #record-line{ color:var(--khaki); }
+  #record-line.beaten{ color:var(--tracer); font-weight:700; }
   .score-popup{
     position:absolute; font-family:'Space Mono',monospace; font-weight:700; font-size:20px;
     color:var(--tracer); pointer-events:none; text-shadow:0 0 8px rgba(255,210,122,.5);
@@ -154,6 +156,7 @@
     <div class="hud-block">
       <div class="hud-label">Score</div>
       <div class="hud-value" id="score-val">0</div>
+      <div class="hud-label" id="record-line" style="margin-top:2px;"></div>
     </div>
     <div class="hud-block" style="text-align:center;">
       <div class="hud-label">Mission</div>
@@ -428,6 +431,21 @@
       const d=document.createElement('div');
       d.className='life-bullet'+(i<lives?'':' lost');
       livesEl.appendChild(d);
+    }
+
+    // Record personnel affiché en direct pendant la partie
+    const recordEl = document.getElementById('record-line');
+    if(currentUser && personalBest.best_score>0){
+      if(score > personalBest.best_score){
+        recordEl.textContent = '🏆 Nouveau record !';
+        recordEl.classList.add('beaten');
+      } else {
+        recordEl.textContent = 'Record : ' + personalBest.best_score + ' pts';
+        recordEl.classList.remove('beaten');
+      }
+    } else {
+      recordEl.textContent = '';
+      recordEl.classList.remove('beaten');
     }
   }
 
