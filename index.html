@@ -55,7 +55,7 @@
     transition: font-size 0.1s; /* léger effet lors du changement */
   }
   #record-line{ color:var(--khaki); }
-  #record-line.beaten{ color:var(--tracer); font-weight:700; }
+  .record-beaten{ color:var(--tracer) !important; font-weight:700; }
   .score-popup{
     position:absolute; font-family:'Space Mono',monospace; font-weight:700; font-size:20px;
     color:var(--tracer); pointer-events:none; text-shadow:0 0 8px rgba(255,210,122,.5);
@@ -123,7 +123,6 @@
   .pause-toggle:hover{ background:rgba(122,127,79,.35); }
 
   #mute-btn{
-    position:absolute; top:16px; left:20px; z-index:20;
     font-family:'Space Mono',monospace; font-size:15px; color:var(--cream);
     background:rgba(20,15,10,.5); border:1px solid rgba(122,127,79,.4);
     border-radius:3px; padding:8px 11px; cursor:pointer; line-height:1;
@@ -131,7 +130,6 @@
   #mute-btn:hover{ background:rgba(122,127,79,.35); }
 
   #account-btn{
-    position:absolute; top:16px; left:70px; z-index:20;
     font-family:'Rajdhani',sans-serif; font-weight:700; font-size:13px; color:var(--cream);
     background:rgba(20,15,10,.5); border:1px solid rgba(122,127,79,.4);
     border-radius:3px; padding:8px 12px; cursor:pointer; line-height:1;
@@ -149,14 +147,18 @@
 <body>
 <div id="game-wrap">
   <canvas id="c"></canvas>
-  <button id="mute-btn" title="Couper/activer le son">🔊</button>
-  <button id="account-btn" title="Mon compte">👤 Compte</button>
 
   <div id="hud">
-    <div class="hud-block">
-      <div class="hud-label">Score</div>
-      <div class="hud-value" id="score-val">0</div>
-      <div class="hud-label" id="record-line" style="margin-top:2px;"></div>
+    <div class="hud-block" style="display:flex; align-items:flex-start; gap:12px;">
+      <div style="display:flex; gap:8px; pointer-events:auto;">
+        <button id="mute-btn" title="Couper/activer le son">🔊</button>
+        <button id="account-btn" title="Mon compte">👤 Compte</button>
+      </div>
+      <div>
+        <div class="hud-label">Score</div>
+        <div class="hud-value" id="score-val">0</div>
+        <div class="hud-label" id="record-line" style="margin-top:2px;"></div>
+      </div>
     </div>
     <div class="hud-block" style="text-align:center;">
       <div class="hud-label">Mission</div>
@@ -203,6 +205,7 @@
       <b style="font-size:18px; margin-top:8px; display:block;">Score final : <span class="accent" id="final-total-score">0</span> pts</b><br>
       <span style="font-size:12px; color:var(--khaki);">Vitesse : <b id="final-wpm">0</b> mots/min · Précision : <b id="final-acc">0</b>%</span>
     </div>
+    <div class="stats" id="final-record-line" style="margin-top:2px;"></div>
     <button class="mission-btn" id="retry-btn">Nouvelle mission</button>
   </div>
 
@@ -364,12 +367,12 @@
     "intelligence","statistique","probabilite","thermodynamique","photosynthese","stratosphere"];
 
   const MISSIONS = [
-    {pool:()=>BANK_EASY,                                spawnInterval:2700, speedMin:15, speedMax:19, target:8},
-    {pool:()=>BANK_EASY,                                spawnInterval:2450, speedMin:18, speedMax:23, target:10},
-    {pool:()=>BANK_EASY.concat(BANK_MID),               spawnInterval:2200, speedMin:21, speedMax:27, target:12},
-    {pool:()=>BANK_EASY.concat(BANK_MID),               spawnInterval:1980, speedMin:25, speedMax:31, target:14},
-    {pool:()=>BANK_EASY.concat(BANK_MID,BANK_HARD),     spawnInterval:1780, speedMin:29, speedMax:36, target:16},
-    {pool:()=>BANK_EASY.concat(BANK_MID,BANK_HARD),     spawnInterval:1600, speedMin:33, speedMax:41, target:18},
+    {pool:()=>BANK_EASY,                                spawnInterval:2700, speedMin:15, speedMax:19, target:12},
+    {pool:()=>BANK_EASY,                                spawnInterval:2450, speedMin:18, speedMax:23, target:16},
+    {pool:()=>BANK_EASY.concat(BANK_MID),               spawnInterval:2200, speedMin:21, speedMax:27, target:20},
+    {pool:()=>BANK_EASY.concat(BANK_MID),               spawnInterval:1980, speedMin:25, speedMax:31, target:24},
+    {pool:()=>BANK_EASY.concat(BANK_MID,BANK_HARD),     spawnInterval:1780, speedMin:29, speedMax:36, target:28},
+    {pool:()=>BANK_EASY.concat(BANK_MID,BANK_HARD),     spawnInterval:1600, speedMin:33, speedMax:41, target:32},
   ];
 
   function getMission(level){
@@ -438,14 +441,14 @@
     if(currentUser && personalBest.best_score>0){
       if(score > personalBest.best_score){
         recordEl.textContent = '🏆 Nouveau record !';
-        recordEl.classList.add('beaten');
+        recordEl.classList.add('record-beaten');
       } else {
         recordEl.textContent = 'Record : ' + personalBest.best_score + ' pts';
-        recordEl.classList.remove('beaten');
+        recordEl.classList.remove('record-beaten');
       }
     } else {
       recordEl.textContent = '';
-      recordEl.classList.remove('beaten');
+      recordEl.classList.remove('record-beaten');
     }
   }
 
@@ -480,7 +483,7 @@
     if(targetWord && targetWord.id===w.id) targetWord=null;
     document.getElementById('target-word').innerHTML='';
     if(hit){
-      score += 10; // 10 pts par mot, peu importe la longueur
+      score += 5; // 5 pts par mot, peu importe la longueur
       scorePopups.push({x: w.x, y: w.y, life: 1.2}); // popup d'animation
       tracers.push({x1:soldierX(), y1:soldierY()-40, x2:w.x, y2:w.y, life:1});
       muzzleFlash = 1;
@@ -509,12 +512,12 @@
     
     // Calcul des bonus
     let precisionBonus = 0;
-    if(acc>=95) precisionBonus = Math.round(score*0.20); // 20% si précision ≥ 95%
-    else if(acc>=85) precisionBonus = Math.round(score*0.10); // 10% si précision ≥ 85%
+    if(acc>=98) precisionBonus = Math.round(score*0.15); // 15% si précision ≥ 98%
+    else if(acc>=92) precisionBonus = Math.round(score*0.07); // 7% si précision ≥ 92%
     
     let speedBonus = 0;
-    if(wpm>=80) speedBonus = Math.round(score*0.15); // 15% si vitesse ≥ 80 MPM
-    else if(wpm>=60) speedBonus = Math.round(score*0.08); // 8% si vitesse ≥ 60 MPM
+    if(wpm>=90) speedBonus = Math.round(score*0.12); // 12% si vitesse ≥ 90 MPM
+    else if(wpm>=70) speedBonus = Math.round(score*0.05); // 5% si vitesse ≥ 70 MPM
     
     const totalScore = score + precisionBonus + speedBonus;
     
@@ -524,6 +527,23 @@
     document.getElementById('final-total-score').textContent = totalScore;
     document.getElementById('final-wpm').textContent = wpm;
     document.getElementById('final-acc').textContent = acc;
+
+    // Comparaison avec le record : avant et après cette partie
+    const finalRecordEl = document.getElementById('final-record-line');
+    if(currentUser){
+      const previousBest = personalBest.best_score;
+      if(totalScore > previousBest){
+        finalRecordEl.innerHTML = '🏆 Nouveau record ! (ancien record : ' + previousBest + ' pts)';
+        finalRecordEl.classList.add('record-beaten');
+      } else {
+        finalRecordEl.innerHTML = 'Ton record reste : ' + previousBest + ' pts';
+        finalRecordEl.classList.remove('record-beaten');
+      }
+    } else {
+      finalRecordEl.textContent = 'Connecte-toi pour sauvegarder et comparer tes records';
+      finalRecordEl.classList.remove('record-beaten');
+    }
+
     document.getElementById('over-overlay').classList.remove('hidden');
     saveScoreIfBetter(totalScore, level);
   }
@@ -676,7 +696,7 @@
       ctx.fillStyle = getCSS('--tracer');
       ctx.font = 'bold 24px "Space Mono", monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('+10', p.x, p.y - yOffset);
+      ctx.fillText('+5', p.x, p.y - yOffset);
       ctx.restore();
     });
 
