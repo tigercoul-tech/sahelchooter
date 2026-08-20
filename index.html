@@ -221,25 +221,35 @@
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
 
-  // ---------- Supabase : compte joueur + sauvegarde de score ----------
+  // ---------- Supabase : compte joueur + sauvegarde de score (optionnel) ----------
   const SUPABASE_URL = 'https://omgoemyrgomxcmbqlixp.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_lT-S0_T_6sakvwF8icNhpA_qdqz49ZT';
   const supa = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
   let currentUser = null;
   let personalBest = { best_score:0, best_level:1 };
 
+  // ---------- Record local : fonctionne sans compte, sur cet appareil ----------
+  let anonymousBest = { best_score:0, best_level:1 };
+  try{
+    const stored = localStorage.getItem('tireur_sahel_best');
+    if(stored) anonymousBest = JSON.parse(stored);
+  }catch(e){ /* stockage local indisponible, on continue sans */ }
+
+  function getEffectiveBest(){
+    return (currentUser && personalBest.best_score>0) ? personalBest : anonymousBest;
+  }
+
   async function refreshAccountUI(){
     const btn = document.getElementById('account-btn');
     if(currentUser){
       btn.textContent = '👤 ' + currentUser.email.split('@')[0];
       await loadPersonalBest();
-      const line = document.getElementById('best-score-line');
-      if(line) line.textContent = 'Ton meilleur score : ' + personalBest.best_score + ' pts';
     } else {
       btn.textContent = '👤 Compte';
-      const line = document.getElementById('best-score-line');
-      if(line) line.textContent = '';
     }
+    const line = document.getElementById('best-score-line');
+    const best = getEffectiveBest();
+    if(line) line.textContent = best.best_score>0 ? 'Ton meilleur score : ' + best.best_score + ' pts' : '';
   }
 
   async function loadPersonalBest(){
@@ -408,6 +418,7 @@
   let muzzleFlash=0;
   let shakeT=0;
   let wordId=0;
+  let recentWords=[]; // historique pour limiter les répétitions
 
   const soldierX = ()=> W*0.5;
   const soldierY = ()=> H*0.86;
@@ -416,7 +427,7 @@
     score=0; lives=3; level=1; activeWords=[]; targetWord=null;
     spawnTimer=0; missionProgress=0; currentMission=getMission(1);
     charsTyped=0; charsCorrect=0; startTime=performance.now();
-    tracers=[]; muzzleFlash=0;
+    tracers=[]; muzzleFlash=0; recentWords=[];
     updateHUD();
   }
 
@@ -436,14 +447,15 @@
       livesEl.appendChild(d);
     }
 
-    // Record personnel affiché en direct pendant la partie
+    // Record personnel affiché en direct pendant la partie — avec ou sans compte
     const recordEl = document.getElementById('record-line');
-    if(currentUser && personalBest.best_score>0){
-      if(score > personalBest.best_score){
+    const liveBest = getEffectiveBest();
+    if(liveBest.best_score>0){
+      if(score > liveBest.best_score){
         recordEl.textContent = '🏆 Nouveau record !';
         recordEl.classList.add('record-beaten');
       } else {
-        recordEl.textContent = 'Record : ' + personalBest.best_score + ' pts';
+        recordEl.textContent = 'Record : ' + liveBest.best_score + ' pts';
         recordEl.classList.remove('record-beaten');
       }
     } else {
@@ -452,9 +464,25 @@
     }
   }
 
+  function pickWord(pool){
+    const lastWord = recentWords[recentWords.length-1];
+    // jamais le même mot deux fois de suite, et pas plus de 2 fois dans les 10 derniers mots
+    let candidates = pool.filter(w=>{
+      if(w===lastWord) return false;
+      const occurrences = recentWords.filter(rw=>rw===w).length;
+      return occurrences < 2;
+    });
+    if(candidates.length===0) candidates = pool.filter(w=>w!==lastWord);
+    if(candidates.length===0) candidates = pool;
+    const chosen = candidates[Math.floor(Math.random()*candidates.length)];
+    recentWords.push(chosen);
+    if(recentWords.length>10) recentWords.shift();
+    return chosen;
+  }
+
   function spawnWord(){
     const pool = currentMission.pool;
-    const word = pool[Math.floor(Math.random()*pool.length)];
+    const word = pickWord(pool);
     const margin = 60;
     const x = margin + Math.random()*(W-margin*2);
     activeWords.push({
@@ -528,24 +556,31 @@
     document.getElementById('final-wpm').textContent = wpm;
     document.getElementById('final-acc').textContent = acc;
 
-    // Comparaison avec le record : avant et après cette partie
+    // Comparaison avec le record : avant et après cette partie — fonctionne sans compte
     const finalRecordEl = document.getElementById('final-record-line');
-    if(currentUser){
-      const previousBest = personalBest.best_score;
-      if(totalScore > previousBest){
-        finalRecordEl.innerHTML = '🏆 Nouveau record ! (ancien record : ' + previousBest + ' pts)';
-        finalRecordEl.classList.add('record-beaten');
-      } else {
-        finalRecordEl.innerHTML = 'Ton record reste : ' + previousBest + ' pts';
-        finalRecordEl.classList.remove('record-beaten');
-      }
+    const previousBest = getEffectiveBest().best_score;
+    const isNewRecord = totalScore > previousBest;
+
+    if(previousBest === 0){
+      finalRecordEl.innerHTML = '🏆 Premier record établi : ' + totalScore + ' pts !';
+      finalRecordEl.classList.add('record-beaten');
+    } else if(isNewRecord){
+      finalRecordEl.innerHTML = '🏆 Nouveau record ! (ancien record : ' + previousBest + ' pts)';
+      finalRecordEl.classList.add('record-beaten');
     } else {
-      finalRecordEl.textContent = 'Connecte-toi pour sauvegarder et comparer tes records';
+      finalRecordEl.innerHTML = 'Ton record reste : ' + previousBest + ' pts';
       finalRecordEl.classList.remove('record-beaten');
     }
 
     document.getElementById('over-overlay').classList.remove('hidden');
-    saveScoreIfBetter(totalScore, level);
+
+    // Sauvegarde du record : dans le compte s'il existe, sinon localement sur cet appareil
+    if(currentUser){
+      saveScoreIfBetter(totalScore, level);
+    } else if(isNewRecord){
+      anonymousBest = { best_score: totalScore, best_level: level };
+      try{ localStorage.setItem('tireur_sahel_best', JSON.stringify(anonymousBest)); }catch(e){}
+    }
   }
 
   // ---------- Input ----------
